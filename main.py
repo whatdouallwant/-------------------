@@ -4,7 +4,11 @@ from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
 from db import crud, models, schemas
 from db.database import SessionLocal, engine
-
+from typing import Annotated, Union
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from datetime import datetime, timedelta
 
 
 models.Base.metadata.create_all(bind=engine)
@@ -18,7 +22,12 @@ def get_db():
 
 app = FastAPI()
 
+SECRET_KEY = "1ferf4tvrr5rf51f51ce51165e6563465tg4fijcu432734lguebd6wxprmvy375nfxhf"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 7000
 
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 class Book(BaseModel):
     author: str = Field(..., min_length=1, max_length=100)
@@ -46,15 +55,35 @@ books = {
     ]
 }
 
+def token_create(data: dict):
+    expires_delta = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+    return encoded_jwt
+
+@app.post("/token")
+async def token_get(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: Session = Depends(get_db)): 
+    user_check = db.query(models.User).filter(models.User.login == form_data.username, models.User.password== form_data.password).fill()
+    if not user_check:
+        raise HTTPException(status_code=400, detail="Неправильний логін або пароль")
+    
+    token = token_create(data={"sub": user_check.login})
+    return {"access_token": token, "token_type": "bearer"}
 
 @app.get("/books/{author}", response_model= list[schemas.BookDB])
-def get_books(author:str, db: Session = Depends(get_db)):
-    if author in books:
-        boo = db.query(models.Book).filter(models.Author.name == author).all()
+def get_books(author:str, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    boo = db.query(models.Book).filter(models.Author.name == author).all()
+    if boo:
         return boo
+    raise HTTPException(status_code=404, detail="Автора не знайдено")
     
-    else:
-        return {'message': 'Такого автора не знайдено'}
+    
 
 
 @app.post('/books/add/')
