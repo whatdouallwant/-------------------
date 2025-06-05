@@ -17,7 +17,8 @@ class BookDB(Book):
     class Config:
         orm_mode = True
 
-
+class BookCreate(Book):
+    author_name:  str = Field(..., min_length= 1, max_length= 100)
 class AuthorDB(Author):
     id: int
     books: List[BookDB]= []

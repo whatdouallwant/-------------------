@@ -35,7 +35,6 @@ class Book(BaseModel):
     pages: int = Field(..., ge=15)
 
 
-
 books = {
     "Джордж Оруелл": [
         {"title": "1984", "pages": 328},
@@ -83,25 +82,61 @@ def get_books(author:str, db: Session = Depends(get_db), token: str = Depends(oa
         return boo
     raise HTTPException(status_code=404, detail="Автора не знайдено")
     
-    
-
 
 @app.post('/books/add/')
-def add_book(new_book: models.Book):
-    if new_book.author not in books:
-        books[new_book.author]=[]
-
-    books[new_book.author].append(new_book)
+def add_book(new_book: schemas.BookCreate, 
+        db: Session = Depends(get_db), 
+        token: str = Depends(oauth2_scheme)):
+    db_author = db.query(models.Author).filter(models.Author.name == books.author_name).first()
+    if not db_author:
+        db_author = models.Author(name = books.author_name)
+        db.add(db_author)
+        db.commit()
+        db.refresh(db_author)
 
     return {'massege': ',ldl'}
     
+    db_book = models.Book(title = book.title, pages = book.pages, author_id = author_name.id)
+    db.add(db_book)
+    db.commit()
+    db.refresh(db_book)
     
 @app.delete('/books/')
 def delete_book(title: str = Query(min_length=1, max_length=100),
-                author: str = Query(min_length=1, max_length=100)):
+                author: str = Query(min_length=1, max_length=100),
+                db: Session = Depends(get_db),
+                token: str = Depends(oauth2_scheme)):
     
-    if author in books:
-        for book in book[author]:
-            if book.title == title:
-                books[author].remove(book)
-                return{'message': 'Book was deleted'}
+    boo_db = db.query(models.Book).filter(models.Book.title==title, models.Author.name==author).first()
+    if boo_db:
+        db.delete(boo_db)
+        db.commit()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
